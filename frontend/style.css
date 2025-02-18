@@ -1,5 +1,5 @@
 body {
-    background-color: #000000;
+    background-color: #0d0043;
     margin: 0;
     font-family: 'Arial', sans-serif;
     overflow-y: scroll;
@@ -15,7 +15,7 @@ h1 {
 }
 
 .main {
-    background-color: #d3d3d3;
+    background-color: #000000;
     border-radius: 15px;
     width: calc((100vh - 160px) * (4 / 3));
     max-width: 100%;
@@ -61,4 +61,31 @@ footer a:hover {
     background-color: #555555;
     border-radius: 10px;
     border: 3px solid #333333;
+}
+
+/* Styles for the graph */
+
+.main-grid-line {
+    stroke: #295eff;
+    stroke-width: 1;
+}
+
+.dense-grid-line {
+    stroke: #31deb3;
+    stroke-width: 0.5;
+}
+
+.axis-label {
+    font-size: 12px;
+    fill: #a99cff;
+}
+
+.axis-line {
+    stroke: #6724f9;
+    stroke-width: 2;
+}
+
+.axis-arrow {
+    stroke: #6724f9;
+    stroke-width: 2;
 }
