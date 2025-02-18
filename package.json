@@ -1,0 +1,23 @@
+{
+  "name": "stock-market-game",
+  "version": "1.0.0",
+  "description": "Pottentially addictive stock market game",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ActiveTutorial/stock-market-game.git"
+  },
+  "author": "Active Tutorial",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ActiveTutorial/stock-market-game/issues"
+  },
+  "homepage": "https://github.com/ActiveTutorial/stock-market-game#readme",
+  "dependencies": {
+    "express": "^4.21.2",
+    "path": "^0.12.7"
+  }
+}
