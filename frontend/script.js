@@ -124,7 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.stroke();
 
         // Remove temporary elements
-        Object.values(styleElements).forEach(element => document.body.removeChild(element));
+        document.querySelector("#style-element-container").innerHTML = '';
     }
 
     function drawCanvas() {

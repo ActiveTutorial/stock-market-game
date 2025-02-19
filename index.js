@@ -15,11 +15,12 @@ app.get('/api/version', versionEndpoint);
 
 // Trade endpoint
 const tradeEndpoint = require('./endpoints/trade');
-app.use('/api/trade', tradeEndpoint);
+app.post('/api/trade/buy', tradeEndpoint.buy);
+app.post('/api/trade/sell', tradeEndpoint.sell);
 
 // Register endpoint
 const registerEndpoint = require('./endpoints/register');
-app.use('/api/register', registerEndpoint);
+app.post('/api/register', registerEndpoint);
 
 app.listen(port, () => {
   console.log(`Server is running at http://localhost:${port}`);
