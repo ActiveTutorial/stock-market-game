@@ -1,36 +1,72 @@
 const express = require('express');
-const router = express.Router();
 const bcrypt = require('bcrypt');
 const db = require('../database');
 
+const dbi = {
+    getTotalSharesBought: async function() {
+        // Query the database for the total shares bought
+        const { rows } = await db.query('SELECT totalSharesBought FROM stock FOR UPDATE');
+        return rows[0].totalsharesbought;
+    },
+    setTotalSharesBought: async function(totalSharesBought) {
+        // Update the total shares bought in the database
+        await db.query('UPDATE stock SET totalSharesBought = $1', [totalSharesBought]);
+        return totalSharesBought;
+    },
+    transaction: async function(callback) {
+        await db.query('BEGIN');
+        try {
+            const result = await callback();
+            await db.query('COMMIT');
+            return result;
+        } catch (err) {
+            await db.query('ROLLBACK');
+            throw err;
+        }
+    },
+    fetchUser: async function(id) {
+        // Fetch a user from the database
+        const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [id]);
+        return rows[0];
+    },
+    setUser: async function(id, balance, stocksOwned) {
+        // Update the user's balance and stocks owned in the database
+        await db.query('UPDATE users SET balance = $1, stocksowned = $2 WHERE id = $3', [balance, stocksOwned, id]);
+    }
+};
+
 class Stock {
     async getTotalSharesBought() {
-        const { rows } = await db.query('SELECT totalSharesBought FROM stock FOR UPDATE');
-        if (rows[0].totalsharesbought == null) {
-            await this.setTotalSharesBought(0.1);
-            return 0.1;
-        }
-        return rows[0].totalsharesbought;
+        return dbi.getTotalSharesBought();
     }
 
     async setTotalSharesBought(totalSharesBought) {
-        await db.query('UPDATE stock SET totalSharesBought = $1', [totalSharesBought]);
+        return dbi.setTotalSharesBought(totalSharesBought);
     }
 
     async getPrice() {
+        // The "price" is the value of the entire share, but this is just for when the part of the share is infinitely small
         const totalSharesBought = await this.getTotalSharesBought();
-        if (totalSharesBought >= 1) throw new Error("Shares exceed limit");
+        if (totalSharesBought >= 1) { // There can never be 100% shares bought
+            console.error("Fatal error: Shares exceed limit, FIX IMMEDIATELY!!!!!!!!");
+            throw new Error("Shares exceed limit");
+        }
+        // Price increases asympotically as total shares bought approaches 1
         return (1 / (1 - totalSharesBought) ** 2) - 1;
     }
 
     async stockBuyWorth(budget) {
+        // Actual worth for shares when buying
         const price = await this.getPrice();
+        // Introducing money should increase the worth of the share
         const newPrice = price + budget;
         const totalSharesBought = await this.getTotalSharesBought();
+        // This is a solved integral, in its un-integrated form its an infinite sum with a limit
         return 1 - Math.sqrt(1 / (newPrice + 1)) - totalSharesBought;
     }
 
     async stockSellWorth(budget) {
+        // Actual worth for shares when selling, diffrerent from buying
         const price = await this.getPrice();
         const newPrice = price - budget;
         const totalSharesBought = await this.getTotalSharesBought();
@@ -38,107 +74,107 @@ class Stock {
     }
 
     async buy(budget) {
-        const client = await db.query('BEGIN');
-        try {
+        // Transaction to ensure that everything is consistent
+        return dbi.transaction(async () => {
+            // Fetch total shares bought and worth of budget
             const totalSharesBought = await this.getTotalSharesBought();
             const sharesToBuy = await this.stockBuyWorth(budget);
             const newTotalShares = totalSharesBought + sharesToBuy;
 
+            // Update the total shares bought
             await this.setTotalSharesBought(newTotalShares);
 
+            // Fetch the price of the share
             const price = await this.getPrice();
-            await db.query('COMMIT');
+            // Return the new total shares bought, the price of the share and the amount of share bought
             return { totalSharesBought: newTotalShares, price, sharesToBuy };
-        } catch (err) {
-            await db.query('ROLLBACK');
-            throw err;
-        }
+        });
     }
 
     async sell(budget) {
-        const client = await db.query('BEGIN');
-        try {
+        // Transaction to ensure that everything is consistent
+        return dbi.transaction(async () => {
+            // Fetch total shares bought and worth of budget
             const totalSharesBought = await this.getTotalSharesBought();
             let sharesToSell = await this.stockSellWorth(budget);
 
             // Check how many shares the user has
-            const { rows } = await db.query('SELECT stocksowned FROM users WHERE id = $1', [this.userId]);
-            if (rows[0].stocksowned < sharesToSell) {
-                sharesToSell = rows[0].stocksowned;
+            const { stocksOwned, balance } = await dbi.fetchUser(this.userId);
+            // If user wants to sell more shares than they have, sell all shares
+            if (stocksOwned < sharesToSell) {
+                sharesToSell = stocksOwned;
             }
 
+            // Update the total shares bought
             const newTotalShares = totalSharesBought - sharesToSell;
-
             await this.setTotalSharesBought(newTotalShares);
             
             const price = await this.getPrice();
-            await db.query('COMMIT');
-            return { totalSharesBought: newTotalShares, price , sharesToSell};
-        } catch (err) {
-            await db.query('ROLLBACK');
-            throw err;
-        }
+
+            // Return the new total shares bought, the price of the share and the amount of share sold,
+            // the amount of shares the user has left, and the user's balance
+            return { totalSharesBought: newTotalShares, price, sharesToSell, stocksOwned, balance };
+        });
     }
 }
 
-const stock = new Stock();
+const stock = new Stock(); // Create the stock object
+let userId = null;
 
-async function buyStock(budget, userId) {
-    const client = await db.query('BEGIN');
-    try {
-        const { rows } = await db.query('SELECT balance FROM users WHERE id = $1 FOR UPDATE', [userId]);
-        if (rows.length === 0) throw new Error("User not found");
-        if (rows[0].balance < budget) throw new Error("Insufficient funds");
-
-        await db.query('UPDATE users SET balance = balance - $1 WHERE id = $2', [budget, userId]);
+async function buyStock(budget) {
+    return dbi.transaction(async () => {
+        const user = await dbi.fetchUser(userId);
+        console.table({userId, user});
+        if (user === undefined) {
+            throw new Error("User not found");
+        }
+        const balance = user.balance
+        // If the user doesn't have enough money, buy as much as possible
+        if (balance < budget) {
+            budget = balance;
+        }
 
         stock.userId = userId;
         const result = await stock.buy(budget);
 
-        await db.query('UPDATE users SET stocksowned = stocksowned + $1 WHERE id = $2', [result.sharesToBuy, userId]);
+        await dbi.setUser(userId, balance - budget, user.stocksowned + result.sharesToBuy);
 
-        await db.query('COMMIT');
-        return result;
-    } catch (err) {
-        await db.query('ROLLBACK');
-        console.log(err);
-        throw err;
-    }
+        return {...result, balance: balance - budget};
+    });
 }
 
-async function sellStock(budget, userId) {
-    const client = await db.query('BEGIN');
-    try {
-        const { rows } = await db.query('SELECT balance FROM users WHERE id = $1 FOR UPDATE', [userId]);
-        if (rows.length === 0) throw new Error("User not found");
-
-        await db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [budget, userId]);
+async function sellStock(budget) {
+    return dbi.transaction(async () => {
+        const user = await dbi.fetchUser(userId);
+        if (user === undefined) {
+            throw new Error("User not found");
+        }
+        const balance = user.balance
 
         stock.userId = userId;
         const result = await stock.sell(budget);
 
-        await db.query('UPDATE users SET stocksowned = stocksowned - $1 WHERE id = $2', [result.sharesToSell, userId]);
+        await dbi.setUser(userId, balance + budget, user.stocksowned - result.sharesToSell);
 
-        await db.query('COMMIT');
-        return result;
-    } catch (err) {
-        await db.query('ROLLBACK');
-        throw err;
-    }
+        return {...result, balance: balance + budget};
+    });
 }
 
 module.exports = {
     buy: async (req, res) => {
         try {
+            // Extract the budget and user data from the request body
             const { budget, user } = req.body;
             const { id, password } = user;
+            userId = id;
 
-            const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [id]);
-            if (rows.length === 0) return res.status(401).json({ error: 'Unauthorized' });
-
-            const validPassword = await bcrypt.compare(password, rows[0].password);
+            // Authenticate the user
+            const fullUser = await dbi.fetchUser(id);
+            if (!fullUser) return res.status(401).json({ error: 'Unauthorized' });
+            const validPassword = await bcrypt.compare(password, fullUser.password);
             if (!validPassword) return res.status(401).json({ error: 'Unauthorized' });
 
+            // Buy and return the result
             const stockData = await buyStock(budget, id);
             res.json(stockData);
         } catch (err) {
@@ -147,17 +183,39 @@ module.exports = {
     },
     sell: async (req, res) => {
         try {
+            // Extract the budget and user data from the request body
             const { budget, user } = req.body;
             const { id, password } = user;
+            userId = id;
 
-            const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [id]);
-            if (rows.length === 0) return res.status(401).json({ error: 'Unauthorized' });
-
-            const validPassword = await bcrypt.compare(password, rows[0].password);
+            // Authenticate the user
+            const fullUser = await dbi.fetchUser(id);
+            if (!fullUser) return res.status(401).json({ error: 'Unauthorized' });
+            const validPassword = await bcrypt.compare(password, fullUser.password);
             if (!validPassword) return res.status(401).json({ error: 'Unauthorized' });
 
+            // Sell and return the result
             const stockData = await sellStock(budget, id);
             res.json(stockData);
+        } catch (err) {
+            res.status(400).json({ error: err.message });
+        }
+    },
+    look: async (req, res) => {
+        try {
+            // Extract the budget and user data from the request body
+            const { budget, user } = req.body;
+            const { id, password } = user;
+            userId = id;
+
+            // Get totalSharesBought, price, and user data
+            const totalSharesBought = await stock.getTotalSharesBought();
+            const price = await stock.getPrice();
+            const fullUser = await dbi.fetchUser(userId);
+            const balance = fullUser.balance;
+            const stocksOwned = fullUser.stocksowned;
+            res.json({ totalSharesBought, price, balance, stocksOwned });
+
         } catch (err) {
             res.status(400).json({ error: err.message });
         }

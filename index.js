@@ -17,6 +17,7 @@ app.get('/api/version', versionEndpoint);
 const tradeEndpoint = require('./endpoints/trade');
 app.post('/api/trade/buy', tradeEndpoint.buy);
 app.post('/api/trade/sell', tradeEndpoint.sell);
+app.post('/api/trade/look', tradeEndpoint.look);
 
 // Register endpoint
 const registerEndpoint = require('./endpoints/register');
