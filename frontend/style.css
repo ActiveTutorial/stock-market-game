@@ -1,3 +1,5 @@
+/* Styles for the main page */
+
 body {
     background-color: #0d0043;
     margin: 0;
@@ -48,6 +50,8 @@ footer a {
 footer a:hover {
     text-decoration: underline;
 }
+
+/* Styles for scrollbar */
 
 ::-webkit-scrollbar {
     width: 12px;

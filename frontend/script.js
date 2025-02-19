@@ -7,13 +7,14 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('version').textContent = `Stock Market Game v${data.version}`;
         });
 
+    
     // Create canvas
     const canvas = document.getElementById('stockCanvas');
     const ctx = canvas.getContext('2d');
 
     function resizeCanvas() {
         const mainDiv = document.querySelector('.main');
-        // Adjust size to fit inside the div
+        // Adjust size to fit inside the main div
         canvas.width = mainDiv.clientWidth - 40; 
         canvas.height = mainDiv.clientHeight - 40;
     }
@@ -28,13 +29,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         ctx.clearRect(0, 0, width, height); // Clear the canvas before drawing
 
-        // Create temporary elements to get computed styles
+        // Create elements to get computed styles
         const styleElements = {};
         ['main-grid-line', 'dense-grid-line', 'axis-label', 'axis-line', 'axis-arrow'].forEach(className => {
             styleElements[className] = document.createElement('div');
             styleElements[className].className = className;
             styleElements[className].style.display = 'none';
-            document.body.appendChild(styleElements[className]);
+            document.querySelector("#style-element-container").appendChild(styleElements[className]);
         });
 
         // Draw main grid lines
